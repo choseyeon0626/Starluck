@@ -1,24 +1,8 @@
 # streamlit_app.py
 
 import streamlit as st
-
-# --- 라이브러리 임포트 및 오류 처리 ---
-# 앱에 필요한 핵심 라이브러리(부품)가 있는지 먼저 확인합니다.
-try:
-    import requests
-    from bs4 import BeautifulSoup
-# 만약 'requests'나 'bs4'가 없다는 오류(ModuleNotFoundError)가 발생하면,
-# 앱 실행을 중단하고 사용자에게 해결 방법을 안내합니다.
-except ModuleNotFoundError:
-    st.error(
-        """
-        'beautifulsoup4'와 'requests' 라이브러리가 설치되지 않았습니다.
-        이 앱을 실행하려면 아래 명령어를 터미널(Terminal)에 복사하여 붙여넣고 실행해주세요.
-        """
-    )
-    st.code("pip install beautifulsoup4 requests", language="bash")
-    # 라이브러리가 없으면 더 이상 진행되지 않도록 st.stop()으로 앱 실행을 중단합니다.
-    st.stop()
+import requests
+from bs4 import BeautifulSoup
 
 # --- 핵심 기능 함수 ---
 
@@ -50,21 +34,28 @@ def get_zodiac_sign(month, day):
         return "물고기자리"
     return None
 
-@st.cache_data(ttl=21600)  # 6시간 동안 운세 결과 캐싱
+# st.cache_data: 함수의 실행 결과를 캐싱합니다.
+# ttl=21600: 캐시 유효 시간을 6시간(21600초)으로 설정하여 불필요한 웹 요청을 줄입니다.
+@st.cache_data(ttl=21600)
 def get_todays_horoscope(zodiac_sign):
-    """별자리 이름을 입력받아 오늘의 운세를 웹에서 가져옵니다."""
+    """별자리 이름을 입력받아 네이버 운세 페이지에서 오늘의 운세를 가져옵니다."""
     try:
         url = f"https://search.naver.com/search.naver?query={zodiac_sign}+운세"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
-        response.raise_for_status()
+        response.raise_for_status()  # 요청 실패 시 예외 발생
+
         soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 운세 내용이 담긴 HTML 요소를 CSS 선택자로 찾습니다.
+        # 주의: 이 선택자는 네이버 웹사이트의 구조가 변경되면 동작하지 않을 수 있습니다.
         horoscope_element = soup.select_one('div.detail > p.text')
         
         if horoscope_element:
             return horoscope_element.get_text(strip=True)
         else:
-            return "운세 정보를 가져올 수 없습니다. 웹 페이지 구조가 변경되었을 수 있습니다."
+            return "운세 정보를 가져올 수 없습니다. 웹 페이지의 구조가 변경되었을 수 있습니다."
+            
     except Exception as e:
         return f"운세 정보를 가져오는 중 오류가 발생했습니다: {e}"
 
@@ -80,11 +71,16 @@ birth_input = st.text_input(
 if st.button("오늘의 운세 확인하기"):
     if birth_input:
         try:
+            # 입력된 문자열을 '-' 기준으로 나누어 월과 일로 변환
             month, day = map(int, birth_input.split('-'))
+            
+            # 별자리 계산
             zodiac_sign = get_zodiac_sign(month, day)
             
             if zodiac_sign:
                 st.success(f"당신의 별자리는 **'{zodiac_sign}'** 입니다.")
+                
+                # 운세를 가져오는 동안 스피너(로딩 애니메이션) 표시
                 with st.spinner(f"'{zodiac_sign}'의 오늘의 운세를 가져오는 중..."):
                     horoscope = get_todays_horoscope(zodiac_sign)
                     st.markdown("---")
@@ -92,8 +88,8 @@ if st.button("오늘의 운세 확인하기"):
                     st.info(horoscope)
             else:
                 st.error("유효하지 않은 날짜입니다. 다시 입력해주세요.")
+
         except ValueError:
             st.error("입력 형식이 잘못되었습니다. '월-일' 형식으로 입력해주세요. (예: 08-14)")
     else:
         st.warning("생년월일을 입력해주세요.")
-        
